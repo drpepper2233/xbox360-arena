@@ -1,0 +1,8 @@
+# COD Black Ops 2
+# Title ID: TODO (best-effort extra)
+# Compat Tier: Broken (see PLAN L4 note; attempt patches, expect failure)
+
+# TODO: license_mask from F0 research
+# TODO: apu from F0 research
+# TODO: apply_patches from F0 research
+# TODO: clear_memory_page_table from F0 research
