@@ -10,9 +10,9 @@ streamed to a web browser via Sunshine (NVENC) + Moonlight Web. Built and verifi
 ## Quick access (current deployment)
 | What | URL | Login |
 |------|-----|-------|
-| Browser stream | `http://192.168.3.202:8080` | `arena` / `REDACTED` |
-| Sunshine UI | `https://192.168.3.202:47990` | `arena` / `REDACTED` |
-| Guest SSH/RDP | `192.168.3.202` | `arena` / `REDACTED` |
+| Browser stream | `http://192.168.3.202:8080` | `arena` / `<ARENA_PASSWORD — see deploy/SECRETS.md>` |
+| Sunshine UI | `https://192.168.3.202:47990` | `arena` / `<ARENA_PASSWORD — see deploy/SECRETS.md>` |
+| Guest SSH/RDP | `192.168.3.202` | `arena` / `<ARENA_PASSWORD — see deploy/SECRETS.md>` |
 
 > The RTX 3090 Ti is shared with VM 100 (ai-video-lab) — they can't run at once.
 > `deploy/control.sh xbox-off` returns the GPU to the video-lab; `xbox-on` takes it back.

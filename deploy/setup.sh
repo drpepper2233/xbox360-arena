@@ -19,13 +19,13 @@ set -euo pipefail
 # ---- Config (override via environment) -------------------------------------------------------
 PVE_HOST="${PVE_HOST:-192.168.0.25}"          # Proxmox host (bigbrother)
 PVE_USER="${PVE_USER:-root}"
-PVE_PASS="${PVE_PASS:-REDACTED}"
+PVE_PASS="${PVE_PASS:-<HOST_ROOT_PASSWORD — see deploy/SECRETS.md>}"
 VMID="${VMID:-360}"
 VMNAME="${VMNAME:-x360-arena}"
 GPU_PCI="${GPU_PCI:-0000:2d:00}"              # RTX 3090 Ti (reuse from `qm config <video-vm>`)
 VIDEO_VMID="${VIDEO_VMID:-100}"               # VM that normally holds the GPU (ai-video-lab)
 GUEST_USER="${GUEST_USER:-arena}"
-GUEST_PASS="${GUEST_PASS:-REDACTED}"
+GUEST_PASS="${GUEST_PASS:-<ARENA_PASSWORD — see deploy/SECRETS.md>}"
 WIN_ISO="${WIN_ISO:-local:iso/Win11_25H2_English_x64.iso}"
 VIRTIO_ISO="${VIRTIO_ISO:-local:iso/virtio-win.iso}"
 HTTP_PORT="${HTTP_PORT:-8099}"                # host LAN mirror for guest downloads
