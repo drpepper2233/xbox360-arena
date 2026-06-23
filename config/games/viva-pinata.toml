@@ -1,6 +1,8 @@
-# Halo: Reach
-# Title ID: TODO (VERIFY id+tier in PLAN)
+# Viva Piñata
+# Title ID: 4D5307F2
 # Compat Tier: Playable
+
+scribble_heap = true
 
 # TODO: license_mask from F0 research
 # TODO: apu from F0 research
