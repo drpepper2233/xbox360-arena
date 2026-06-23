@@ -1,4 +1,3 @@
-#Requires -RunAsAdministrator
 [CmdletBinding()]
 param(
     [string]$InstallRoot = "C:\X360Arena",
@@ -6,8 +5,19 @@ param(
     [switch]$SkipGuestSetup
 )
 
-Set-StrictMode -Version Latest
+# StrictMode removed: it turns benign missing-property reads into hard crashes.
 $ErrorActionPreference = "Stop"
+
+# Self-elevate. The auto-login account is an administrator, but its interactive shell is
+# NON-elevated (UAC split token), so FirstLogonCommands / a plain run arrives here unelevated
+# and every install would fail with "requires elevation." Relaunch through UAC.
+$__principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not $__principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    $__args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
+    if ($SkipGuestSetup) { $__args += "-SkipGuestSetup" }
+    Start-Process powershell.exe -Verb RunAs -ArgumentList $__args
+    return
+}
 
 function New-Directory {
     param([Parameter(Mandatory=$true)][string]$Path)
@@ -211,17 +221,11 @@ function Install-Win32OpenSshFromZip {
 
 function Ensure-OpenSshServer {
     Write-Step "installing and enabling OpenSSH Server"
-    $capabilityName = "OpenSSH.Server~~~~0.0.1.0"
 
-    try {
-        $capability = Get-WindowsCapability -Online -Name $capabilityName -ErrorAction SilentlyContinue
-        if (-not $capability -or $capability.State -ne "Installed") {
-            Add-WindowsCapability -Online -Name $capabilityName | Out-Null
-        }
-    } catch {
-        Write-Warning "Windows capability install failed: $($_.Exception.Message)"
-    }
-
+    # DO NOT use Add-WindowsCapability (Windows Update FoD) here: on a guest that cannot reach
+    # Microsoft's update servers it HANGS indefinitely (observed live ~6 min, DISM ignores Ctrl+C
+    # and the call never returns, so try/catch can't save you). The Win32-OpenSSH GitHub zip is
+    # reachable and reliable, so install straight from it.
     if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
         Install-Win32OpenSshFromZip
     }

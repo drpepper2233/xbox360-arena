@@ -8,6 +8,8 @@ param(
 
 # Set-StrictMode removed: it turned benign missing-property reads into hard crashes
 $ErrorActionPreference = "Stop"
+# Windows default execution policy is Restricted and blocks this script; force Bypass (we are elevated).
+try { Set-ExecutionPolicy Bypass -Scope LocalMachine -Force -ErrorAction SilentlyContinue } catch {}
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -315,25 +317,17 @@ function Configure-MoonlightWeb {
     $moonlightWebRunDir = Split-Path -Parent $MoonlightWebExe
     $serverDir = Join-Path $moonlightWebRunDir "server"
     New-Directory -Path $serverDir
-    $lanIp = Get-PrimaryIPv4
-    $config = [ordered]@{
-        web_server = [ordered]@{
-            bind_address = "0.0.0.0:8080"
-        }
-        webrtc = [ordered]@{
-            port_range = [ordered]@{
-                min = 40000
-                max = 40010
-            }
-            nat_1to1 = [ordered]@{
-                ice_candidate_type = "host"
-                ips = @($lanIp)
-            }
-        }
-    }
-    $config | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $serverDir "config.json") -Encoding UTF8
+    # CRITICAL: write config.json as clean UTF-8 with NO BOM. The web-server is a Rust binary
+    # whose serde JSON parser rejects a BOM ("expected value, line 1 column 1"). PowerShell's
+    # Set-Content -Encoding UTF8 emits a BOM, so use .NET WriteAllText with a no-BOM encoder.
+    # "{}" = all defaults (binds 0.0.0.0:8080, first_login_create_admin=true) — verified working.
+    # A partial web_server object fails ("missing field first_login_create_admin"), so omit it.
+    [System.IO.File]::WriteAllText((Join-Path $serverDir "config.json"), "{}", (New-Object System.Text.UTF8Encoding($false)))
 
+    # Run via Scheduled Task: a process spawned over an SSH session is killed when the session
+    # closes, so launching web-server.exe directly does not persist. The task survives + auto-starts.
     $taskName = "X360Arena-MoonlightWebStream"
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
     $action = New-ScheduledTaskAction -Execute $MoonlightWebExe -WorkingDirectory $moonlightWebRunDir
     $trigger = New-ScheduledTaskTrigger -AtStartup
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
@@ -348,13 +342,11 @@ function Ensure-FirewallRule {
         [Parameter(Mandatory=$true)][string]$LocalPort
     )
 
-    $existing = Get-NetFirewallRule -DisplayName $DisplayName -ErrorAction SilentlyContinue
-    if ($existing) {
-        Set-NetFirewallRule -DisplayName $DisplayName -Enabled True -Direction Inbound -Action Allow
-        Set-NetFirewallPortFilter -AssociatedNetFirewallRule $existing -Protocol $Protocol -LocalPort $LocalPort
-    } else {
-        New-NetFirewallRule -DisplayName $DisplayName -Direction Inbound -Action Allow -Protocol $Protocol -LocalPort $LocalPort | Out-Null
-    }
+    # Remove-and-recreate is simpler/idempotent. Split the port string into an array so mixed
+    # range+list values ("47998-48000,48010") are accepted — passing the raw string fails with
+    # "The port is invalid." -Profile Any so it works on Public networks (the VM defaults to Public).
+    Remove-NetFirewallRule -DisplayName $DisplayName -ErrorAction SilentlyContinue
+    New-NetFirewallRule -DisplayName $DisplayName -Direction Inbound -Action Allow -Protocol $Protocol -LocalPort ($LocalPort -split ',') -Profile Any | Out-Null
 }
 
 function Open-StreamingFirewall {
@@ -373,6 +365,25 @@ function Test-ViGEmBus {
     }
 }
 
+function Enable-NvencCapture {
+    # Sunshine only uses NVENC if it captures the NVIDIA display. With both the emulated VGA and
+    # the passed-through GPU present, Sunshine captures the emulated VGA (1Hz) and falls back to
+    # software libx264. Disable the emulated adapter so Sunshine captures the 3090 Ti -> hevc_nvenc.
+    # Guarded: only act once the NVIDIA GPU is present AND healthy (i.e. driver installed), so this
+    # is safe to run pre-GPU (it just no-ops and tells you to re-run after the driver lands).
+    $nv = Get-PnpDevice -Class Display -ErrorAction SilentlyContinue |
+        Where-Object { $_.FriendlyName -match "NVIDIA" -and $_.Status -eq "OK" }
+    if ($nv) {
+        Get-PnpDevice -Class Display -ErrorAction SilentlyContinue |
+            Where-Object { $_.FriendlyName -match "Basic Display" } |
+            Disable-PnpDevice -Confirm:$false -ErrorAction SilentlyContinue
+        Restart-Service SunshineService -Force -ErrorAction SilentlyContinue
+        Write-Host "NVENC enabled: emulated VGA disabled, Sunshine restarted to capture the NVIDIA GPU."
+    } else {
+        Write-Host "NVENC pending: NVIDIA GPU not healthy yet. Bind the GPU + install the driver, then re-run this script to switch Sunshine to hardware encoding."
+    }
+}
+
 New-Directory -Path $InstallRoot
 New-Directory -Path $PackageDir
 
@@ -386,6 +397,7 @@ Configure-Sunshine -XeniaExe $xeniaExe -XeniaManagerExe $xeniaManagerExe
 Configure-MoonlightWeb -MoonlightWebExe $moonlightWebExe
 Open-StreamingFirewall
 Test-ViGEmBus
+Enable-NvencCapture
 
 $streamUrl = "http://$(Get-PrimaryIPv4):8080"
 $sunshineUrl = "https://$(Get-PrimaryIPv4):47990"
