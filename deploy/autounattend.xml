@@ -189,9 +189,9 @@
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
-          <Description>Stage and run xbox360-arena bootstrap</Description>
+          <Description>Run xbox360-arena bootstrap from answer ISO</Description>
           <RequiresUserInput>false</RequiresUserInput>
-          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; New-Item -ItemType Directory -Path 'C:\X360Arena\deploy' -Force | Out-Null; $src = Get-PSDrive -PSProvider FileSystem | ForEach-Object { Join-Path $_.Root 'deploy\bootstrap.ps1' } | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1; if ($src) { Copy-Item -Path (Join-Path (Split-Path -Parent $src) '*') -Destination 'C:\X360Arena\deploy' -Recurse -Force }; &amp; 'C:\X360Arena\deploy\bootstrap.ps1' -InstallRoot 'C:\X360Arena' -PayloadRoot 'C:\X360Arena\deploy'"</CommandLine>
+          <CommandLine>cmd.exe /d /v:on /c "for %d in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %d:\deploy\bootstrap.ps1 (powershell.exe -NoProfile -ExecutionPolicy Bypass -File %d:\deploy\bootstrap.ps1 -InstallRoot C:\X360Arena -PayloadRoot %d:\deploy &amp; exit /b !ERRORLEVEL!) &amp; exit /b 1"</CommandLine>
         </SynchronousCommand>
       </FirstLogonCommands>
     </component>
