@@ -1,8 +1,7 @@
 # Sonic Generations
-# Title ID: 53450849
-# Compat Tier: Playable
+title_id = "53450849"
+compat_tier = "Playable"
 
-# TODO: license_mask from F0 research
-# TODO: apu from F0 research
-# TODO: apply_patches from F0 research
-# TODO: clear_memory_page_table from F0 research
+[xenia]
+gpu = "d3d12"
+apply_patches = true

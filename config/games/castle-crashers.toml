@@ -1,8 +1,7 @@
 # Castle Crashers
-# Title ID: 584108A7
-# Compat Tier: Playable
+title_id = "584108A7"
+compat_tier = "Playable"
 
-# TODO: license_mask from F0 research
-# TODO: apu from F0 research
-# TODO: apply_patches from F0 research
-# TODO: clear_memory_page_table from F0 research
+[xenia]
+gpu = "d3d12"
+license_mask = 1

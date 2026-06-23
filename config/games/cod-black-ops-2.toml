@@ -1,8 +1,8 @@
-# COD Black Ops 2
-# Title ID: TODO (best-effort extra)
-# Compat Tier: Broken (see PLAN L4 note; attempt patches, expect failure)
+# Call of Duty: Black Ops II
+title_id = "415608C3"
+compat_tier = "Broken (best-effort)"
 
-# TODO: license_mask from F0 research
-# TODO: apu from F0 research
-# TODO: apply_patches from F0 research
-# TODO: clear_memory_page_table from F0 research
+[xenia]
+gpu = "d3d12"
+apply_patches = true
+clear_memory_page_table = true

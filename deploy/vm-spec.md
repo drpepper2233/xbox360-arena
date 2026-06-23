@@ -187,10 +187,19 @@ qm start 360
 
 | Field | Value |
 |-------|-------|
-| Guest IP | **TBD — install in progress** |
-| SSH | **TBD** |
+| Guest IP | **192.168.3.202** |
+| Subnet / GW | 255.255.252.0 / 192.168.1.1 (DNS: lionsden.local) |
+| User | arena |
+| SSH | **Pending — Elder enabling OpenSSH directly via console** |
 
-*To be filled when bootstrap.ps1 completes and port 22 is open.*
+Confirmed via `ipconfig` in guest cmd window (QMP keyboard injection).
+Windows 11 10.0.26200.8037 installed successfully, arena auto-logged in.
+FirstLogonCommands ran but bootstrap.ps1 did not stage C:\X360Arena (src copy failed).
+Elder taking direct console control to install+start OpenSSH Server.
+
+```bash
+ssh arena@192.168.3.202   # password: REDACTED
+```
 
 ---
 
