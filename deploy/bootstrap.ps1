@@ -29,16 +29,61 @@ function Write-Step {
     Write-Host "[bootstrap] $Message"
 }
 
+function Test-DeployPayload {
+    param([Parameter(Mandatory=$true)][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $false
+    }
+
+    return (Test-Path -LiteralPath (Join-Path $Path "guest-setup.ps1"))
+}
+
+function Resolve-ExistingPath {
+    param([Parameter(Mandatory=$true)][string]$Path)
+
+    if (Test-Path -LiteralPath $Path) {
+        return (Resolve-Path -LiteralPath $Path).ProviderPath
+    }
+
+    return $Path
+}
+
 function Get-PayloadCandidate {
+    $candidates = New-Object System.Collections.Generic.List[string]
+
+    if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+        $candidates.Add($PSScriptRoot)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($PayloadRoot)) {
+        $candidates.Add($PayloadRoot)
+    }
+    $candidates.Add((Join-Path $InstallRoot "deploy"))
+
     $roots = @(Get-PSDrive -PSProvider FileSystem | Select-Object -ExpandProperty Root)
     foreach ($root in $roots) {
         foreach ($relative in @("deploy", "X360Arena\deploy")) {
-            $candidate = Join-Path $root $relative
-            if (Test-Path -LiteralPath (Join-Path $candidate "guest-setup.ps1")) {
-                return $candidate
-            }
+            $candidates.Add((Join-Path $root $relative))
         }
     }
+
+    $seen = @{}
+    foreach ($candidate in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            continue
+        }
+
+        $resolved = Resolve-ExistingPath -Path $candidate
+        if ($seen.ContainsKey($resolved)) {
+            continue
+        }
+        $seen[$resolved] = $true
+
+        if (Test-DeployPayload -Path $resolved) {
+            return $resolved
+        }
+    }
+
     return $null
 }
 
@@ -53,21 +98,28 @@ function Copy-DirectoryContents {
 }
 
 function Stage-Payload {
-    New-Directory -Path $InstallRoot
-    New-Directory -Path $PayloadRoot
+    $targetPayloadRoot = Join-Path $InstallRoot "deploy"
 
-    if (Test-Path -LiteralPath (Join-Path $PayloadRoot "guest-setup.ps1")) {
-        Write-Step "deploy payload already present at $PayloadRoot"
-        return
+    New-Directory -Path $InstallRoot
+    New-Directory -Path $targetPayloadRoot
+
+    if (Test-DeployPayload -Path $targetPayloadRoot) {
+        Write-Step "deploy payload already present at $targetPayloadRoot"
+        return $targetPayloadRoot
     }
 
     $candidate = Get-PayloadCandidate
     if (-not $candidate) {
-        throw "guest-setup.ps1 not found in $PayloadRoot or mounted deploy payload."
+        throw "guest-setup.ps1 not found in $targetPayloadRoot, bootstrap script root, payload hint, or mounted deploy payload."
     }
 
-    Write-Step "copying deploy payload from $candidate to $PayloadRoot"
-    Copy-DirectoryContents -Source $candidate -Destination $PayloadRoot
+    $resolvedTarget = Resolve-ExistingPath -Path $targetPayloadRoot
+    if ($candidate -ne $resolvedTarget) {
+        Write-Step "copying deploy payload from $candidate to $targetPayloadRoot"
+        Copy-DirectoryContents -Source $candidate -Destination $targetPayloadRoot
+    } else {
+        Write-Step "using deploy payload already located at $targetPayloadRoot"
+    }
 
     $candidateRepoRoot = Split-Path -Parent $candidate
     $sourceConfig = Join-Path $candidateRepoRoot "config"
@@ -76,6 +128,8 @@ function Stage-Payload {
         Write-Step "copying config payload from $sourceConfig to $targetConfig"
         Copy-DirectoryContents -Source $sourceConfig -Destination $targetConfig
     }
+
+    return $targetPayloadRoot
 }
 
 function Enable-PrivateNetworkProfile {
@@ -107,12 +161,69 @@ function Enable-Rdp {
     & net.exe localgroup "Remote Desktop Users" "arena" /add 2>$null | Out-Null
 }
 
+function Install-Win32OpenSshFromZip {
+    Write-Step "falling back to Win32-OpenSSH GitHub zip"
+
+    $downloadUri = "https://github.com/PowerShell/Win32-OpenSSH/releases/latest/download/OpenSSH-Win64.zip"
+    $tempRoot = Join-Path $env:TEMP ("x360arena-openssh-" + [Guid]::NewGuid().ToString("N"))
+    $zipPath = Join-Path $tempRoot "OpenSSH-Win64.zip"
+    $extractRoot = Join-Path $tempRoot "extract"
+    $installRoot = Join-Path $env:ProgramFiles "OpenSSH"
+
+    New-Directory -Path $tempRoot
+    New-Directory -Path $extractRoot
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $downloadUri -OutFile $zipPath -UseBasicParsing
+        Expand-Archive -LiteralPath $zipPath -DestinationPath $extractRoot -Force
+
+        $installScript = Get-ChildItem -LiteralPath $extractRoot -Filter "install-sshd.ps1" -Recurse |
+            Select-Object -First 1
+        if (-not $installScript) {
+            throw "install-sshd.ps1 not found in Win32-OpenSSH zip."
+        }
+
+        $sourceRoot = $installScript.Directory.FullName
+        New-Directory -Path $installRoot
+        Copy-DirectoryContents -Source $sourceRoot -Destination $installRoot
+
+        $installedScript = Join-Path $installRoot "install-sshd.ps1"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installedScript
+
+        $sshKeygen = Join-Path $installRoot "ssh-keygen.exe"
+        if (Test-Path -LiteralPath $sshKeygen) {
+            & $sshKeygen -A
+        }
+
+        $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        if (($machinePath -split ";") -notcontains $installRoot) {
+            if ([string]::IsNullOrWhiteSpace($machinePath)) {
+                [Environment]::SetEnvironmentVariable("Path", $installRoot, "Machine")
+            } else {
+                [Environment]::SetEnvironmentVariable("Path", ($machinePath.TrimEnd(";") + ";$installRoot"), "Machine")
+            }
+        }
+    } finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Ensure-OpenSshServer {
     Write-Step "installing and enabling OpenSSH Server"
     $capabilityName = "OpenSSH.Server~~~~0.0.1.0"
-    $capability = Get-WindowsCapability -Online -Name $capabilityName -ErrorAction SilentlyContinue
-    if (-not $capability -or $capability.State -ne "Installed") {
-        Add-WindowsCapability -Online -Name $capabilityName | Out-Null
+
+    try {
+        $capability = Get-WindowsCapability -Online -Name $capabilityName -ErrorAction SilentlyContinue
+        if (-not $capability -or $capability.State -ne "Installed") {
+            Add-WindowsCapability -Online -Name $capabilityName | Out-Null
+        }
+    } catch {
+        Write-Warning "Windows capability install failed: $($_.Exception.Message)"
+    }
+
+    if (-not (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
+        Install-Win32OpenSshFromZip
     }
 
     $service = Get-Service -Name sshd -ErrorAction Stop
@@ -146,12 +257,14 @@ function Set-OpenSshDefaultShell {
 }
 
 function Invoke-GuestSetup {
+    param([Parameter(Mandatory=$true)][string]$StagedPayloadRoot)
+
     if ($SkipGuestSetup) {
         Write-Step "skipping guest-setup.ps1 by request"
         return
     }
 
-    $guestSetup = Join-Path $PayloadRoot "guest-setup.ps1"
+    $guestSetup = Join-Path $StagedPayloadRoot "guest-setup.ps1"
     if (-not (Test-Path -LiteralPath $guestSetup)) {
         throw "Missing guest setup script: $guestSetup"
     }
@@ -167,12 +280,12 @@ $logPath = Join-Path $InstallRoot "logs\bootstrap.log"
 
 Start-Transcript -Path $logPath -Append | Out-Null
 try {
-    Stage-Payload
+    $stagedPayloadRoot = Stage-Payload
     Enable-PrivateNetworkProfile
     Enable-Rdp
     Ensure-OpenSshServer
     Set-OpenSshDefaultShell
-    Invoke-GuestSetup
+    Invoke-GuestSetup -StagedPayloadRoot $stagedPayloadRoot
 
     Set-Content -LiteralPath (Join-Path $InstallRoot ".bootstrap-complete") `
         -Value ("completed {0:o}" -f (Get-Date)) `
