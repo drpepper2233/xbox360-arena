@@ -6,8 +6,11 @@
 - **Assessed By:** Elder (Opus) — built and verified live, end to end
 - **Summary:** The full pipeline works and is GPU-accelerated — Xbox 360 emulation
   (Xenia Canary) on a Windows 11 VM, captured + NVENC-encoded by Sunshine, streamed to
-  a web browser via Moonlight Web. Outstanding items are user-supplied ROMs, an optional
-  gamepad driver, and the documented risks in §7.
+  a web browser via Moonlight Web. **Verified end-to-end: Minecraft: Xbox 360 Edition
+  boots into the game in the browser** (title `584111F7`, via TU75 — see `docs/PLAYING.md`).
+  Outstanding items are an optional gamepad driver (ViGEmBus) and the documented risks in §7.
+- **How to play:** see **`docs/PLAYING.md`** — connect, launch from the desktop, the Minecraft
+  Title-Update fix, and the keyboard/controller mapping.
 
 ---
 
