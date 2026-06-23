@@ -1,8 +1,9 @@
 # Red Dead Redemption
-# Title ID: 5454082B
-# Compat Tier: Playable
+title_id = "5454082B"
+compat_tier = "Playable"
 
-# TODO: license_mask from F0 research
-# TODO: apu from F0 research
-# TODO: apply_patches from F0 research
-# TODO: clear_memory_page_table from F0 research
+[xenia]
+gpu = "d3d12"
+mount_cache = true
+clear_memory_page_table = true
+apply_patches = true

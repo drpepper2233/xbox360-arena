@@ -1,8 +1,9 @@
 # Minecraft: Xbox 360 Edition
-# Title ID: 584111F7
-# Compat Tier: Playable
+title_id = "584111F7"
+compat_tier = "Playable"
 
-# TODO: license_mask from F0 research
-# TODO: apu from F0 research
-# TODO: apply_patches from F0 research
-# TODO: clear_memory_page_table from F0 research
+[xenia]
+gpu = "d3d12"
+license_mask = 1
+apu = "sdl"
+max_queued_frames = 3

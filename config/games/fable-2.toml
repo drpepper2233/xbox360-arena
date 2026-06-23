@@ -1,8 +1,8 @@
 # Fable II
-# Title ID: 4D5307F1
-# Compat Tier: Playable
+title_id = "4D5307F1"
+compat_tier = "Playable"
 
-# TODO: license_mask from F0 research
-# TODO: apu from F0 research
-# TODO: apply_patches from F0 research
-# TODO: clear_memory_page_table from F0 research
+[xenia]
+gpu = "d3d12"
+readback_resolve = true
+apply_patches = true

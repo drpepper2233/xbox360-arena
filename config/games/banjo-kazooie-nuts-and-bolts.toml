@@ -1,8 +1,9 @@
 # Banjo-Kazooie: Nuts & Bolts
-# Title ID: TODO (VERIFY id+tier in PLAN)
-# Compat Tier: Playable
+title_id = "4D5307ED"
+compat_tier = "Playable"
 
-# TODO: license_mask from F0 research
-# TODO: apu from F0 research
-# TODO: apply_patches from F0 research
-# TODO: clear_memory_page_table from F0 research
+[xenia]
+gpu = "d3d12"
+draw_resolution_scale_x = 1
+draw_resolution_scale_y = 1
+apply_patches = true
