@@ -6,7 +6,7 @@ param(
     [switch]$ForceDownload
 )
 
-Set-StrictMode -Version Latest
+# Set-StrictMode removed: it turned benign missing-property reads into hard crashes
 $ErrorActionPreference = "Stop"
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -32,16 +32,16 @@ function New-Directory {
 }
 
 function Get-PrimaryIPv4 {
-    $address = Get-NetIPAddress -AddressFamily IPv4 |
-        Where-Object {
-            $_.IPAddress -notmatch "^(127\.|169\.254\.)" -and
-            $_.PrefixOrigin -ne "WellKnown" -and
-            $_.InterfaceOperationalStatus -eq "Up"
-        } |
-        Sort-Object -Property InterfaceMetric, PrefixLength |
-        Select-Object -First 1
-
-    if ($address) { return $address.IPAddress }
+    try {
+        $cfg = Get-NetIPConfiguration -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPv4DefaultGateway -and $_.IPv4Address } |
+            Select-Object -First 1
+        if ($cfg -and $cfg.IPv4Address) { return $cfg.IPv4Address.IPAddress }
+    } catch {}
+    $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -notmatch "^(127\.|169\.254\.)" } |
+        Select-Object -First 1 -ExpandProperty IPAddress -ErrorAction SilentlyContinue
+    if ($ip) { return $ip }
     return "127.0.0.1"
 }
 
