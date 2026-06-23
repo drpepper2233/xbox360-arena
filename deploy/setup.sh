@@ -1,92 +1,120 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Xbox 360 Arena — single operator entrypoint (host-side orchestrator).
+#
+# Builds, end to end, a Windows 11 VM on a Proxmox host with RTX 3090 Ti passthrough,
+# the Xenia Canary emulator, and Sunshine + Moonlight Web browser streaming.
+# These are the REAL commands that produced the working 2026-06-23 deployment, parameterised.
+#
+# Run from a machine that can ssh to the Proxmox host. Requires: ssh, scp, sshpass, genisoimage
+# (or xorriso). The Windows + virtio ISOs must already be on the host (see PROV step).
+#
+# Usage:
+#   deploy/setup.sh provision   # create VM + answer ISO + start unattended Windows install
+#   deploy/setup.sh software    # push payload + run guest-setup.ps1 (emulator + streaming stack)
+#   deploy/setup.sh gpu         # bind the GPU (control.sh xbox-on) + install NVIDIA driver + NVENC
+#   deploy/setup.sh all         # provision -> wait for SSH -> software -> gpu
+#   deploy/setup.sh status      # show VM + stream reachability
 set -euo pipefail
 
-# Xbox 360 Arena — Operator Entrypoint
-# Provisions a Windows 11 VM on Proxmox with GPU passthrough,
-# installs the emulator stack (Xenia Canary + Sunshine), configures games,
-# and validates streaming to Chrome.
-#
-# Flow: provision VM → install Windows → bind GPU → run guest-setup.ps1 → stream
-# This script documents the end-to-end contract; steps marked TODO are owned by other layers.
-
-set -x  # verbose
-
-# Layer-specific entry points:
-# - VM provision + Windows install → Layer VM-1 (Sentinel)
-# - GPU binding → Layer VM-2 (Sentinel)
-# - Guest automation (PowerShell + Xenia config) → Layer BUILD-1 (Codex)
-# - Documentation + handoff → Layer DOCS (Scribe)
+# ---- Config (override via environment) -------------------------------------------------------
+PVE_HOST="${PVE_HOST:-192.168.0.25}"          # Proxmox host (bigbrother)
+PVE_USER="${PVE_USER:-root}"
+PVE_PASS="${PVE_PASS:-REDACTED}"
+VMID="${VMID:-360}"
+VMNAME="${VMNAME:-x360-arena}"
+GPU_PCI="${GPU_PCI:-0000:2d:00}"              # RTX 3090 Ti (reuse from `qm config <video-vm>`)
+VIDEO_VMID="${VIDEO_VMID:-100}"               # VM that normally holds the GPU (ai-video-lab)
+GUEST_USER="${GUEST_USER:-arena}"
+GUEST_PASS="${GUEST_PASS:-REDACTED}"
+WIN_ISO="${WIN_ISO:-local:iso/Win11_25H2_English_x64.iso}"
+VIRTIO_ISO="${VIRTIO_ISO:-local:iso/virtio-win.iso}"
+HTTP_PORT="${HTTP_PORT:-8099}"                # host LAN mirror for guest downloads
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-CONFIG_DIR="${REPO_ROOT}/config"
-DEPLOY_DIR="${REPO_ROOT}/deploy"
+PVE_SSH=(sshpass -p "$PVE_PASS" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$PVE_USER@$PVE_HOST")
+PVE_SCP=(sshpass -p "$PVE_PASS" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 
-echo "=== Xbox 360 Arena Setup ==="
-echo "Repo root: $REPO_ROOT"
-echo "Config dir: $CONFIG_DIR"
+log() { echo -e "\n=== $* ==="; }
 
-# Step 1: Provision VM on Proxmox (Layer VM-1)
-# TODO: Layer VM-1 (Sentinel) — create Windows 11 VM on bigbrother with:
-#   - VMID: 360 (or next free, per PLAN L3)
-#   - Name: x360-arena
-#   - q35 + OVMF (UEFI) + vTPM
-#   - CPU: 16 cores, RAM: 32 GiB, NVMe: 256 GiB
-#   - Install Windows 11 + NVIDIA Game Ready driver
-#   - Report VM ready and accessible via RDP
+guest_ip() { "${PVE_SSH[@]}" "qm guest cmd $VMID network-get-interfaces 2>/dev/null" \
+  | grep -oE '192\.168\.[0-9.]+' | grep -v '\.255$' | head -1; }
 
-echo "Step 1: TODO — Provision Windows 11 VM (Layer VM-1, Sentinel)"
+provision() {
+  log "PROVISION VM $VMID on $PVE_HOST"
+  "${PVE_SSH[@]}" "bash -s" <<EOF
+set -e
+qm create $VMID --name $VMNAME --machine q35 --bios ovmf --cpu host --cores 16 --memory 32768 \
+  --scsihw virtio-scsi-pci --net0 virtio,bridge=vmbr0 --ostype win11 --agent 1
+qm set $VMID --efidisk0 local-lvm:1,efitype=4m,pre-enrolled-keys=1
+qm set $VMID --tpmstate0 local-lvm:1,version=v2.0
+qm set $VMID --scsi0 local-lvm:256,discard=on,ssd=1
+qm set $VMID --ide2 $WIN_ISO,media=cdrom --ide0 $VIRTIO_ISO,media=cdrom
+EOF
+  log "BUILD answer ISO (autounattend + payload) and attach"
+  build_answer_iso
+  "${PVE_SSH[@]}" "qm set $VMID --ide3 local:iso/x360-answer.iso,media=cdrom; qm set $VMID --boot order='ide2;scsi0;ide0;ide3'; qm start $VMID"
+  log "Windows is installing unattended. NOTE: the Win11 ISO shows 'Press any key to boot from CD' —"
+  echo "  if the install doesn't start, flood Enter via: qm sendkey $VMID ret (a few times right after boot)."
+  echo "  bootstrap.ps1 self-elevates, installs OpenSSH (from GitHub zip), and runs guest-setup at first logon."
+}
 
-# Step 2: Bind GPU passthrough (Layer VM-2)
-# TODO: Layer VM-2 (Sentinel) — bind RTX 3090 Ti to the VM:
-#   - Resolve GPU PCI address from existing VM 100 (ai-video-lab)
-#   - Power off VM 100
-#   - Add hostpci0 = RTX 3090 Ti (x-vga=1, all functions) to VM 360
-#   - Boot VM 360, verify GPU appears in Device Manager
+build_answer_iso() {
+  local pw_esc; pw_esc="$GUEST_PASS"
+  local tmp; tmp="$(mktemp -d)"
+  mkdir -p "$tmp/deploy" "$tmp/config"
+  cp "$REPO_ROOT"/deploy/*.ps1 "$tmp/deploy/" 2>/dev/null || true
+  cp "$REPO_ROOT/deploy/autounattend.xml" "$tmp/autounattend.xml"
+  cp -r "$REPO_ROOT/config/." "$tmp/config/"
+  # Inject the admin password into the answer file copy (never committed to git).
+  sed -i.bak "s/PLACEHOLDER_REPLACE_WITH_ARENA_PASSWORD/$pw_esc/g" "$tmp/autounattend.xml" && rm -f "$tmp/autounattend.xml.bak"
+  if command -v genisoimage >/dev/null; then ISO=genisoimage; else ISO=xorriso; fi
+  if [ "$ISO" = genisoimage ]; then
+    genisoimage -J -R -V X360AUTOUNATTEND -o /tmp/x360-answer.iso "$tmp"
+  else
+    xorriso -as mkisofs -J -R -V X360AUTOUNATTEND -o /tmp/x360-answer.iso "$tmp"
+  fi
+  "${PVE_SCP[@]}" /tmp/x360-answer.iso "$PVE_USER@$PVE_HOST:/var/lib/vz/template/iso/x360-answer.iso"
+  rm -rf "$tmp" /tmp/x360-answer.iso
+}
 
-echo "Step 2: TODO — Bind GPU passthrough (Layer VM-2, Sentinel)"
+software() {
+  local ip; ip="$(guest_ip)"; [ -z "$ip" ] && { echo "guest IP not found (is Windows up + SSH on?)"; exit 1; }
+  log "SOFTWARE install on guest $ip (Xenia + Sunshine + Moonlight Web)"
+  local GSSH=(sshpass -p "$GUEST_PASS" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$GUEST_USER@$ip")
+  local GSCP=(sshpass -p "$GUEST_PASS" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+  "${GSSH[@]}" "New-Item -ItemType Directory -Force -Path C:\\X360Arena\\deploy,C:\\X360Arena\\config\\games | Out-Null"
+  "${GSCP[@]}" "$REPO_ROOT"/deploy/*.ps1 "$GUEST_USER@$ip:C:/X360Arena/deploy/"
+  "${GSCP[@]}" "$REPO_ROOT"/config/games/*.toml "$GUEST_USER@$ip:C:/X360Arena/config/games/"
+  # Execution policy is Restricted by default; guest-setup self-sets Bypass but invoke explicitly too.
+  "${GSSH[@]}" "powershell -ExecutionPolicy Bypass -File C:\\X360Arena\\deploy\\guest-setup.ps1"
+  log "Stream: http://$ip:8080  (Sunshine UI: https://$ip:47990)"
+}
 
-# Step 3: Copy per-game configs to VM
-# TODO: Transfer config/games/*.toml files to VM (/path/to/xenia/config/)
-echo "Step 3: TODO — Copy per-game configs from config/games/ to guest"
+gpu() {
+  log "GPU bind via control.sh xbox-on (powers off VM $VIDEO_VMID) + NVIDIA driver"
+  VMID="$VMID" "$SCRIPT_DIR/control.sh" --yes xbox-on || true
+  # wait for guest SSH back, then install the driver (which also flips Sunshine to NVENC)
+  local ip; for _ in $(seq 1 40); do ip="$(guest_ip)"; [ -n "$ip" ] && break; sleep 8; done
+  [ -z "$ip" ] && { echo "guest IP not found after GPU bind"; exit 1; }
+  local GSSH=(sshpass -p "$GUEST_PASS" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$GUEST_USER@$ip")
+  "${GSSH[@]}" "powershell -ExecutionPolicy Bypass -File C:\\X360Arena\\deploy\\install-nvidia.ps1"
+  log "GPU + NVENC ready. nvidia-smi above should list the RTX 3090 Ti."
+}
 
-# Step 4: Run guest automation (Layer BUILD-1)
-# TODO: Layer BUILD-1 (Codex) — execute guest-setup.ps1 on Windows:
-#   - Install Xenia Canary (D3D12 backend) + Xenia Manager
-#   - Install Sunshine (NVENC streaming)
-#   - Configure per-game settings from config/games/*.toml
-#   - Enable Sunshine service
-#   - Output the stream URL (e.g., https://VM-IP:8443)
+status() {
+  "${PVE_SSH[@]}" "qm status $VMID; qm config $VMID | grep -i hostpci || echo 'GPU: not bound'"
+  local ip; ip="$(guest_ip)"; echo "guest IP: ${ip:-unknown}"
+  [ -n "$ip" ] && curl -s -o /dev/null -w "stream :8080 -> HTTP %{http_code}\n" --max-time 8 "http://$ip:8080" || true
+}
 
-echo "Step 4: TODO — Run guest-setup.ps1 on Windows VM (Layer BUILD-1, Codex)"
-
-# Step 5: Validate streaming
-# TODO: Test streaming to Chrome from another host:
-#   - Open Moonlight-web (or fallback client) at the URL from Step 4
-#   - Verify video feed (low-latency H.264/HEVC via NVENC)
-#   - Test gamepad input (HTML5 Gamepad API)
-#   - Verify Sunshine logs show active stream
-
-echo "Step 5: TODO — Validate streaming to Chrome"
-
-# Step 6: Verify game compatibility (Layer VERIFY)
-# TODO: Layer VERIFY (Quill) — test at least the 10 Playable titles:
-#   - Minecraft (required; must run if ROM supplied)
-#   - Red Dead Redemption, Skate 3, Castle Crashers, Fable II, Halo 3,
-#     Gears of War, Sonic Generations, Halo: Reach, Banjo-Kazooie: Nuts & Bolts
-#   - For each title: boot, verify D3D12 rendering, confirm gamepad responds
-
-echo "Step 6: TODO — Verify game compatibility (Layer VERIFY, Quill)"
-
-# Step 7: Documentation & handoff (Layer DOCS)
-# TODO: Layer DOCS (Scribe) — produce docs/SETUP.md and L18 handoff verdict:
-#   - Record exact provisioning steps, IP/credentials, stream URL
-#   - Verify setup is reproducible from this script + docs
-#   - Produce layer18-handoff-YYYY-MM-DD-HHMM.md (READY / READY WITH RISKS / NOT READY)
-
-echo "Step 7: TODO — Documentation & handoff (Layer DOCS, Scribe)"
-
-echo "=== Setup contract complete ==="
-echo "All steps marked TODO are owned by other layers (per PLAN L5)."
-echo "When all layers complete, the full pipeline is: provision VM → install Windows → bind GPU →"
-echo "run guest-setup.ps1 (configures games from config/games/) → stream to Chrome → verify games."
+case "${1:-all}" in
+  provision) provision ;;
+  software)  software ;;
+  gpu)       gpu ;;
+  status)    status ;;
+  all)       provision; log "Waiting for Windows install + SSH (can take ~20 min)..."
+             for _ in $(seq 1 150); do [ -n "$(guest_ip)" ] && break; sleep 12; done
+             software; gpu; status ;;
+  *) echo "usage: $0 {provision|software|gpu|all|status}"; exit 2 ;;
+esac
