@@ -6,7 +6,7 @@ Status: **Minecraft: Xbox 360 Edition verified booting into the game** via the b
 ---
 
 ## 1. Connect to the stream
-1. Browser → **`http://192.168.3.202:8080`** (Chrome/Safari) → log in `arena` / `AdVictoriam360!`
+1. Browser → **`http://192.168.3.202:8080`** (Chrome/Safari) → log in `arena` / `<ARENA_PASSWORD — see deploy/SECRETS.md>`
 2. Connect to the host (paired) → launch **Desktop** (you'll see the live Windows desktop)
 3. Make sure the stream has input focus: **click on the video** once, or use the Moonlight
    overlay's **"Keyboard"** / **"Lock Mouse"** buttons (left side of the stream UI).

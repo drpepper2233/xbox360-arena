@@ -151,7 +151,7 @@ mkdir -p /tmp/iso-build/deploy /tmp/iso-build/config/games
 
 # Files transferred via tar pipe from Mac (deploy/ + config/games/)
 # autounattend.xml moved to ISO root; password injected on bigbrother (NOT committed)
-sed -i 's/PLACEHOLDER_REPLACE_WITH_ARENA_PASSWORD/AdVictoriam360!/g' /tmp/iso-build/autounattend.xml
+sed -i 's/PLACEHOLDER_REPLACE_WITH_ARENA_PASSWORD/<ARENA_PASSWORD — see deploy/SECRETS.md>/g' /tmp/iso-build/autounattend.xml
 # Verification: 2 occurrences replaced, 0 remaining
 
 # Build ISO with xorriso
@@ -198,7 +198,7 @@ FirstLogonCommands ran but bootstrap.ps1 did not stage C:\X360Arena (src copy fa
 Elder taking direct console control to install+start OpenSSH Server.
 
 ```bash
-ssh arena@192.168.3.202   # password: AdVictoriam360!
+ssh arena@192.168.3.202   # password: <ARENA_PASSWORD — see deploy/SECRETS.md>
 ```
 
 ---

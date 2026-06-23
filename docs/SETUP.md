@@ -5,7 +5,7 @@ How to operate the deployed system. For a from-scratch rebuild use `deploy/setup
 see `docs/HANDOFF.md`.
 
 ## 1. Prerequisites
-- **Proxmox host:** `bigbrother` (`192.168.0.25`, root / `money123456`)
+- **Proxmox host:** `bigbrother` (`192.168.0.25`, root / `<HOST_ROOT_PASSWORD — see deploy/SECRETS.md>`)
 - **GPU:** NVIDIA RTX 3090 Ti (`hostpci0 = 0000:2d:00`), shared with VM 100 (ai-video-lab)
 - **Client:** any machine with Chrome/Safari on the LAN
 - **Optional:** an Xbox/generic controller (passes through via the HTML5 Gamepad API)
@@ -38,9 +38,9 @@ On boot, these auto-start: OpenSSH (`sshd`), `SunshineService`, and the Moonligh
 `BC:24:11:E6:B2:4A`).
 
 ## 5. Stream access
-- **Browser stream:** `http://192.168.3.202:8080` — login `arena` / `AdVictoriam360!`
+- **Browser stream:** `http://192.168.3.202:8080` — login `arena` / `<ARENA_PASSWORD — see deploy/SECRETS.md>`
 - **Sunshine admin:** `https://192.168.3.202:47990` — same login
-- **Guest SSH/RDP:** `192.168.3.202` — `arena` / `AdVictoriam360!`
+- **Guest SSH/RDP:** `192.168.3.202` — `arena` / `<ARENA_PASSWORD — see deploy/SECRETS.md>`
 
 Connect → launch **Desktop** (or a game app) → see `docs/PLAYING.md` to launch + control games.
 Pairing (if needed): Moonlight Web shows a PIN; submit it in Sunshine (already paired once).

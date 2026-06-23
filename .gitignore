@@ -3,3 +3,4 @@ roms/
 *.iso
 *.god
 *.xex
+deploy/SECRETS.md

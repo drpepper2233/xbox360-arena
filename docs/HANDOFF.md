@@ -17,10 +17,10 @@
 ## 2. Access URLs & Credentials
 | What | Address | Login |
 |------|---------|-------|
-| **Browser stream (open in Chrome/Safari)** | `http://192.168.3.202:8080` | `arena` / `AdVictoriam360!` (first login created admin) |
-| **Sunshine admin UI** | `https://192.168.3.202:47990` | `arena` / `AdVictoriam360!` |
-| **Windows guest (SSH / RDP)** | `192.168.3.202:22` / `:3389` | `arena` / `AdVictoriam360!` |
-| **Proxmox host (bigbrother)** | `https://192.168.0.25:8006` · `ssh root@192.168.0.25` | `root` / `money123456` (+ M1-SLAB key) |
+| **Browser stream (open in Chrome/Safari)** | `http://192.168.3.202:8080` | `arena` / `<ARENA_PASSWORD — see deploy/SECRETS.md>` (first login created admin) |
+| **Sunshine admin UI** | `https://192.168.3.202:47990` | `arena` / `<ARENA_PASSWORD — see deploy/SECRETS.md>` |
+| **Windows guest (SSH / RDP)** | `192.168.3.202:22` / `:3389` | `arena` / `<ARENA_PASSWORD — see deploy/SECRETS.md>` |
+| **Proxmox host (bigbrother)** | `https://192.168.0.25:8006` · `ssh root@192.168.0.25` | `root` / `<HOST_ROOT_PASSWORD — see deploy/SECRETS.md>` (+ M1-SLAB key) |
 
 > Pairing: Moonlight Web → add host → enter the PIN it shows into Sunshine. Already paired
 > once on 2026-06-23 (PIN 1116, `{"status":true}`). Re-pair anytime via the Sunshine UI.
