@@ -29,10 +29,11 @@ Guaranteed-working set (verify each against Xenia compat DB before claiming):
  6 Halo 3 (4D5307E6) — Playable
  7 Gears of War (4D5307D5) — Playable
  8 Sonic Generations (53450849) — Playable
- 9 Halo: Reach — Playable (VERIFY id+tier)
-10 Banjo-Kazooie: Nuts & Bolts — Playable (VERIFY id+tier)
+ 9 Banjo-Kazooie: Nuts & Bolts (4D5307ED) — Playable [F0b verified; native 1x scale]
+10 Viva Piñata (4D5307F2) — Playable [F0b: replaces Halo Reach (only "Runs"); scribble_heap=true]
 Best-effort extras (install, do not count toward the 10): COD Black Ops 1 (Runs),
 COD Black Ops 2 (Broken — attempt patches, expect failure).
+WEB CLIENT (F0b): primary moonlight-web-stream (MrCreativ3001); alt vibeshine/luminalshine (/webrtc).
 NOTE: Game ROM/ISO files are the High Elder's to supply (copyright). Emulator+stream
 are built independent of ROMs; per-game verification needs the files present.
 

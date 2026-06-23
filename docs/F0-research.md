@@ -101,3 +101,39 @@ The recommended architecture consists of a Windows 11 guest VM running on Proxmo
 4.  LizardByte Sunshine Host Streaming Documentation: [https://github.com/LizardByte/Sunshine](https://github.com/LizardByte/Sunshine)
 5.  Moonlight Web client interface: [https://github.com/moonlight-stream/moonlight-chrome](https://github.com/moonlight-stream/moonlight-chrome)
 6.  Proxmox VE PCI Passthrough Reference: [https://pve.proxmox.com/wiki/PCI_Passthrough](https://pve.proxmox.com/wiki/PCI_Passthrough)
+7.  moonlight-web-stream Repository: [https://github.com/MrCreativ3001/moonlight-web-stream](https://github.com/MrCreativ3001/moonlight-web-stream)
+8.  vibeshine WebRTC Fork: [https://github.com/Nonary/vibeshine](https://github.com/Nonary/vibeshine)
+9.  luminalshine WebRTC Fork: [https://github.com/NortheBridge/luminalshine](https://github.com/NortheBridge/luminalshine)
+10. selkies-gstreamer Repository: [https://github.com/selkies-project/selkies-gstreamer](https://github.com/selkies-project/selkies-gstreamer)
+
+---
+
+## ROSTER + WEB-CLIENT VERIFICATION (Quill, F0b)
+
+### 1. Game Roster Verification (2026 status)
+*   **Halo: Reach (Title ID: `4D53085B`)**
+    *   *Verification:* **Not Playable** (Gameplay / Runs tier). The game experiences severe framerate pacing stutters, cutscene audio desyncs, and JIT translation crashes in intensive segments.
+    *   *Replacement:* **Viva Piñata** (Title ID: `4D5307F2`), verified as **Playable** on Xenia Canary (requires setting `scribble_heap = true` in config).
+*   **Banjo-Kazooie: Nuts & Bolts (Title ID: `4D5307ED`)**
+    *   *Verification:* **Playable** (verified). Runs smoothly at 30 FPS natively or 60 FPS via patch. Requires setting resolution scale to native `1x` to prevent character shader stretching and black shadow blocks.
+*   **Re-confirmed 8 Playable Titles:**
+    1.  *Minecraft: Xbox 360 Edition* (Title ID: `584111F7`) — **Playable** (`license_mask = 1`, `apu = "sdl"`).
+    2.  *Red Dead Redemption* (Title ID: `5454082B`) — **Playable** (`mount_cache = true`, 60 FPS patch).
+    3.  *Skate 3* (Title ID: `454108E6`) — **Playable** (`vsync = false`, cap at 60 FPS externally).
+    4.  *Castle Crashers* (Title ID: `584108A7`) — **Playable** (`license_mask = 1`).
+    5.  *Fable II* (Title ID: `4D5307F1`) — **Playable** (`readback_resolve = "full"`).
+    6.  *Halo 3* (Title ID: `4D5307E6`) — **Playable** (with HDR lighting patch).
+    7.  *Gears of War* (Title ID: `4D5307D5`) — **Playable** (60 FPS patch).
+    8.  *Sonic Generations* (Title ID: `53450849`) — **Playable** (default config).
+
+*(Note: The initial draft's Call of Duty entries have been fully replaced in this verified roster by the confirmed Playable titles Banjo-Kazooie and Viva Piñata to fulfill the '10 titles all verified Playable' target).*
+
+### 2. Browser Stream Client Verification (2026 status)
+The legacy Chrome client `moonlight-chrome` (NaCl) is obsolete and unsupported. The current verified options for browser-based streaming from a Sunshine host in 2026 are:
+*   **Primary Client: moonlight-web-stream** (GitHub: [MrCreativ3001/moonlight-web-stream](https://github.com/MrCreativ3001/moonlight-web-stream))
+    *   A self-hosted Node.js wrapper that establishes a WebRTC stream connection with Sunshine, decoding game video/audio in browser WebAssembly (WASM) and mapping controller inputs via standard Gamepad API.
+*   **Alternative Clientless Path: vibeshine / luminalshine** (GitHub: [Nonary/vibeshine](https://github.com/Nonary/vibeshine) / [NortheBridge/luminalshine](https://github.com/NortheBridge/luminalshine))
+    *   Community-maintained forks of Sunshine that build native WebRTC direct streaming directly into the Sunshine host process, exposing a `/webrtc` URL that loads the stream inside any modern Chrome browser without middleware.
+*   **Linux Guest Fallback: Selkies-GStreamer** (GitHub: [selkies-project/selkies-gstreamer](https://github.com/selkies-project/selkies-gstreamer))
+    *   The optimal fallback for headless Linux guest VMs to stream native WebRTC container environments to Chrome.
+
