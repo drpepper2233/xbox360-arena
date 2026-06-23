@@ -137,6 +137,63 @@ Windows Setup should be visible in the Proxmox noVNC console.
 
 ---
 
+## VM-1b — Unattended Install
+
+**Started:** 2026-06-23 ~12:22 EDT  
+**Status:** Installing (monitor PID 1186440 on bigbrother at /tmp/vm360-monitor.log)
+
+### Answer ISO Build
+
+```bash
+# On bigbrother — ISO build directory prepared from repo files
+rm -rf /tmp/iso-build
+mkdir -p /tmp/iso-build/deploy /tmp/iso-build/config/games
+
+# Files transferred via tar pipe from Mac (deploy/ + config/games/)
+# autounattend.xml moved to ISO root; password injected on bigbrother (NOT committed)
+sed -i 's/PLACEHOLDER_REPLACE_WITH_ARENA_PASSWORD/AdVictoriam360!/g' /tmp/iso-build/autounattend.xml
+# Verification: 2 occurrences replaced, 0 remaining
+
+# Build ISO with xorriso
+xorriso -as mkisofs \
+  -iso-level 3 \
+  -J -R \
+  -V X360AUTOUNATTEND \
+  -o /var/lib/vz/template/iso/x360-answer.iso \
+  /tmp/iso-build
+# Result: 434K, 20 files, at /var/lib/vz/template/iso/x360-answer.iso
+```
+
+### ISO Attach + VM Reset
+
+```bash
+qm set 360 --ide3 local:iso/x360-answer.iso,media=cdrom
+qm stop 360
+qm start 360
+```
+
+**Final boot order:** `ide2;scsi0;ide0;ide3`  
+(Win11 ISO boots first; autounattend.xml on ide3 found by Windows PE)
+
+### ISOs on VM 360
+
+| Slot | ISO | Purpose |
+|------|-----|---------|
+| ide2 | Win11_25H2_English_x64.iso | Boot media |
+| ide0 | virtio-win.iso | Storage + network drivers |
+| ide3 | x360-answer.iso | autounattend.xml + deploy/ payload |
+
+### Guest IP + SSH
+
+| Field | Value |
+|-------|-------|
+| Guest IP | **TBD — install in progress** |
+| SSH | **TBD** |
+
+*To be filled when bootstrap.ps1 completes and port 22 is open.*
+
+---
+
 ## VM-2 Handoff Notes
 
 - GPU to bind: `hostpci0: 0000:2d:00,x-vga=1,pcie=1`
